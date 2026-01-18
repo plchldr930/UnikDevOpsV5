@@ -1,0 +1,133 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    folder: 1C
+    name: 1c_alerts
+    interval: 1m
+    rules:
+      - uid: 1c-long-query
+        title: "1C: Запрос выполняется более 30 секунд"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheusuid      
+            queryType: ""
+            relativeTimeRange:
+              from: 300                      
+              to: 0
+            model:
+              expr: rate(1c_query_time_seconds{job=~"1c_.*"}[5m]) > 30
+              instant: false
+              range: true
+              legendFormat: "{{instance}}"
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: critical
+          service: 1c
+          component: query
+        annotations:
+          summary: "Долгий запрос в 1С (более 30 сек)"
+          description: |
+            На сервере {{ $labels.instance }} обнаружен запрос, выполняющийся более 30 секунд.
+            Текущее время: {{ $values.B.Value | humanizeDuration }} сек.
+
+      - uid: 1c-db-connection-error
+        title: "1C: Ошибка подключения к СУБД"
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: lokiuid               
+            queryType: range
+            relativeTimeRange:
+              from: 300                       
+              to: 0
+            model:
+              expr: '{job="1c_logs"} |~ "(?i)(db_error|субд|connection failed|ошибка подключения|timeout|deadlock)"'
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: critical
+          service: 1c
+          component: database
+        annotations:
+          summary: "Ошибка подключения к СУБД в 1С"
+          description: |
+            В логах найдены ошибки подключения к БД.
+            Количество: {{ $values.A.Value }}.
+
+      - uid: 1c-mass-locks
+        title: "1C: Массовые блокировки сеансов"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheusuid
+            queryType: ""
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: sum(rate(1c_session_locks_total{job=~"1c_.*"}[5m])) by (instance) > 10
+              instant: false
+              range: true
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: warning
+          service: 1c
+          component: locks
+        annotations:
+          summary: "Массовые блокировки сеансов в 1С"
+          description: |
+            На {{ $labels.instance }} >10 блокировок/мин.
+            Значение: {{ $values.B.Value }}.
+
+      - uid: 1c-agent-down
+        title: "1C: Агент кластера недоступен"
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheusuid
+            queryType: ""
+            relativeTimeRange:
+              from: 60                        
+              to: 0
+            model:
+              expr: up{job=~"1c_agent|ragent"} == 0
+        noDataState: Alerting                 
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: critical
+          service: 1c
+          component: cluster
+        annotations:
+          summary: "Агент кластера 1С (ragent) недоступен"
+          description: "up = 0 на {{ $labels.instance }}"
+
+      - uid: 1c-cluster-manager-down
+        title: "1C: Менеджер кластера недоступен"
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheusuid
+            queryType: ""
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              expr: up{job=~"1c_manager|rmngr"} == 0
+        noDataState: Alerting
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: critical
+          service: 1c
+          component: cluster
+        annotations:
+          summary: "Менеджер кластера 1С (rmngr) недоступен"
+          description: "up = 0 на {{ $labels.instance }}"

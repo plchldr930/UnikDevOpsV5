@@ -1,0 +1,64 @@
+logging {
+  level = "info"
+}
+
+// Сбор метрик ОС
+prometheus.exporter.unix "node" { }
+
+prometheus.scrape "metrics" {
+  targets    = prometheus.exporter.unix.node.targets
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+/* Закоменчено ввиду отсутствия сервера в учебной версии, пути файлов дефолтные под замену
+
+// Сбор логов 1С (r-agent и r-mngr)
+local.file_match "logs_1c_system" {
+  path_targets = [
+    { "__address__" = "localhost", "filename" = "/var/log/1C/ragent.log", "job" = "1c-system" },
+    { "__address__" = "localhost", "filename" = "/var/log/1C/rmngr.log", "job" = "1c-system" },
+  ]
+}
+
+loki.source.file "logs_1c_system" {
+  targets    = local.file_match.logs_1c_system.targets
+  forward_to = [loki.process.parse_1c.receiver]
+}
+
+// Парсинг структуры логов 1С
+loki.process "parse_1c" {
+  stage.regex {
+    expression = "^(?P<time>\\d{10}),(?P<level>[A-Z]+),(?P<content>.*)"
+  }
+  
+  stage.labels {
+    values = {
+      level = "level",
+    }
+  }
+
+  // Алертинг на основе анализа контента
+  stage.match {
+    selector = "{job=\"1c-system\"} |= \"DBMS\""
+    stage.labels {
+      alert_type = "db_error",
+    }
+  }
+
+  forward_to = [loki.write.local_loki.receiver]
+}
+*/
+
+
+// Отправка в Loki и Prometheus
+loki.write "local" {
+    endpoint {
+        url = "http://loсalhost:3100/loki/api/v1/push"
+    }
+}
+
+prometheus.remote_write "local" {
+    endpoint {
+        url = "http://localhost:9090/api/v1/write"
+    }
+}
